@@ -1,0 +1,62 @@
+﻿@page "/Admin/Users"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = Roles.Admin)]
+@rendermode InteractiveServer
+@using FsElements.Models.Admin
+@using FsElements.Services
+@inject IUsersService UsersService
+
+<h3>Users</h3>
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>Id</th>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Roles</th>
+        </tr>
+    </thead>
+    @if (users != null)
+    {
+        @foreach (var user in users)
+        {
+            <tr>
+                <td>@user.UserId</td>
+                <td>@user.UserName</td>
+                <td>@user.Email</td>
+                <td>
+                    @if (user.Roles != null)
+                    {
+                        @foreach (var r in user.Roles)
+                        {
+                            <span>@r</span>
+                        }
+                        @if (user.Roles.Contains(Roles.Seller))
+                        {
+                            <br />
+                            <div @onclick="() => OnActiveSellerChange(user)">
+                                <input type="checkbox" checked="@user.IsActiveSeller" />
+                                <label>Active Seller</label>
+                            </div>
+                        }
+                    }
+                </td>
+            </tr>
+        }
+    }
+</table>
+
+
+@code {
+    List<UserWithRolesViewModel>? users;
+
+    protected override async Task OnInitializedAsync()
+    {
+        users = await UsersService.GetAllUsers();
+    }
+
+    private async Task OnActiveSellerChange(UserWithRolesViewModel user)
+    {
+        await UsersService.SetIsActiveSeller(user.UserId!, !user.IsActiveSeller);
+    }
+}

@@ -1,0 +1,213 @@
+﻿@page "/seller/element/{id:int?}"
+@using FsElements.Components.Account.Shared
+@using FsElements.Data
+@using FsElements.Data.Elements
+@using FsElements.Services
+@using Microsoft.AspNetCore.Identity
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = Roles.Seller)]
+@rendermode InteractiveServer
+
+@inject IElementsService ElementsService
+@inject IElementCategoriesService ElementCategoriesService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject UserManager<FsUser> UserManager
+@inject NavigationManager Navigation
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
+
+<h3>Add/Edit Element</h3>
+
+@if (!string.IsNullOrEmpty(errorText))
+{
+    <StatusMessage Message="@errorText" />
+}
+else if (editContext != null && model != null)
+{
+    <EditForm EditContext="@editContext" OnValidSubmit="OnSubmit" class="container" style="max-width: 700px;">
+        <DataAnnotationsValidator />                
+        <ValidationSummary class="text-danger" role="alert" />
+        <div class="form-floating mb-3">
+            <InputSelect @bind-Value="model.CategoryId" @bind-Value:after="()=>OnCategoryChanged()" class="form-select">
+                @foreach (var c in categories)
+                {
+                    <option value="@c.Id">@c.Name</option>
+                }
+            </InputSelect>
+            <label class="form-label">Category</label>
+        </div>
+        <div class="form-floating mb-3">            
+            <div class="dropdown">
+                <button class="form-control dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    Form:
+                    @if (selectedForm != null)
+                    {
+                        <img class="form-img" src="/Images/Forms/@selectedForm.Image" />
+                    }
+                </button>
+                <ul class="form-img-container dropdown-menu">
+                    @foreach (var f in forms)
+                    {
+                        <li><img class="m-1 form-img" src="/Images/Forms/@f.Image" @onclick="()=>OnFormSelected(f)" /></li>
+                    }
+                </ul>
+            </div>            
+        </div>
+        <div class="form-floating mb-3">
+            <InputText @bind-Value="model.UniqueCode" class="form-control" />
+            <label class="form-label">Code</label>
+            <ValidationMessage For="() => model.UniqueCode" class="text-danger" />
+        </div>
+        <div class="form-floating mb-3">
+            <InputText @bind-Value="model!.Name" class="form-control" />
+            <label class="form-label">Name</label>
+            <ValidationMessage For="() => model.Name" class="text-danger" />
+        </div>
+        <div class="form-floating mb-3">
+            <InputFile class="form-control" OnChange="OnImageFileChange" />
+            <label class="form-label">Image</label>
+        </div>        
+        <div class="row">
+            <div class="col">
+                <div class="form-floating mb-3">
+                    <InputNumber @bind-Value="model!.PriceRetail" class="form-control" />
+                    <label class="form-label">Price Retail</label>
+                    <ValidationMessage For="() => model.PriceRetail" class="text-danger" />
+                </div>
+            </div>
+            <div class="col">
+                <div class="form-floating mb-3">
+                    <InputNumber @bind-Value="model!.PriceWholesale" class="form-control" />
+                    <label class="form-label">Price Wholesale</label>
+                    <ValidationMessage For="() => model.PriceWholesale" class="text-danger" />
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col">
+                <div class="form-floating mb-3">
+                    <InputNumber @bind-Value="model!.Width" class="form-control" />
+                    <label class="form-label">Width(mm)</label>
+                    <ValidationMessage For="() => model.Width" class="text-danger" />
+                </div>
+            </div>
+            <div class="col">
+                <div class="form-floating mb-3">
+                    <InputNumber @bind-Value="model!.Height" class="form-control" />
+                    <label class="form-label">Height(mm)</label>
+                    <ValidationMessage For="() => model.Height" class="text-danger" />
+                </div>
+            </div>
+            <div class="col">
+                <div class="form-floating mb-3">
+                    <InputNumber @bind-Value="model!.Weight" class="form-control" />
+                    <label class="form-label">Weight(kg)</label>
+                    <ValidationMessage For="() => model.Weight" class="text-danger" />
+                </div>
+            </div>
+        </div>
+        <div>
+            <button type="submit" class="w-100 btn btn-lg btn-primary">Submit</button>
+        </div>
+    </EditForm>
+}
+
+<style>
+    .form-img {
+        height: 50px;
+    }
+
+    .form-img-container {
+        max-height: 400px;
+        overflow-y: scroll;
+    }
+</style>
+
+@code {
+    [Parameter]
+    public int? Id { get; set; }
+
+    private EditContext? editContext;
+
+    private string? errorText;
+    private Element? model;
+    private FsUser? user;
+    private List<ElementCategory> categories = new();
+    private List<ElementForm> forms = new();
+    private ElementForm? selectedForm;
+    private IBrowserFile? browserFile;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var userIdentity = state.User;
+
+        if (userIdentity != null && userIdentity.Identity != null)
+        {
+            user = await UserManager.FindByNameAsync(userIdentity.Identity.Name!);
+        }
+        else
+        {
+            errorText = "User not found";
+            return;
+        }
+
+        categories = await ElementCategoriesService.GetAllCategories();
+
+        if (Id.HasValue)
+        {
+            model = await ElementsService.GetElementById(Id.Value);
+            if (model == null)
+            {
+                errorText = "Element not found";
+            }
+            else if (model.SellerId != user!.Id)
+            {
+                errorText = "You can not edit element of other seller";
+            }
+        }
+        else
+        {
+            model = new Element()
+            {
+                SellerId = user!.Id,
+                CategoryId = categories.First().Id
+            };
+        }
+        await OnCategoryChanged();
+        editContext = new EditContext(model!);
+    }
+
+    private async Task OnCategoryChanged()
+    {
+        forms = await ElementCategoriesService.GetFormsByCategoryId(model!.CategoryId);
+        if (model.ElementFormId == 0)
+        {
+            model.ElementFormId = forms.First().Id;            
+        }
+
+        selectedForm = forms.FirstOrDefault(x => x.Id == model.ElementFormId);
+        if(selectedForm == null)
+        {
+            selectedForm = forms.First();
+            model.ElementFormId = selectedForm.Id;
+        }
+    }
+
+    private void OnFormSelected(ElementForm form)
+    {
+        selectedForm = form;
+        model.ElementFormId = selectedForm.Id;
+    }
+
+    private void OnImageFileChange(InputFileChangeEventArgs args)
+    {
+        browserFile = args.File;
+    }
+
+    public async Task OnSubmit()
+    {
+        await ElementsService.AddOrEdit(model, browserFile);
+        Navigation.NavigateTo("/seller/elements");
+    }    
+    
+}

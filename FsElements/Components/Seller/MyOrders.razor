@@ -1,0 +1,58 @@
+﻿@page "/seller/orders"
+@using FsElements.Data
+@using FsElements.Services
+@using Microsoft.AspNetCore.Identity
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = Roles.Seller)]
+@rendermode InteractiveServer
+
+@inject IOrderService OrderService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject UserManager<FsUser> UserManager
+
+<h3>MyOrders</h3>
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>Elements</th>
+            <th>Phone</th>
+            <th>Address</th>
+        </tr>
+    </thead>
+    @if (orders != null)
+    {
+        @foreach (var order in orders)
+        {
+            <tr>
+                <td>
+                    <ul>
+                        @foreach (var item in order.Items)
+                        {
+                            <li>((@item.Element.UniqueCode) @item.Element.Name) x @item.Count</li>
+                        }
+                    </ul>
+                </td>
+                <td>@order.BuyerPhone</td>
+                <td>@order.Address</td>
+            </tr>
+        }
+    }
+</table>
+
+@code
+{
+    private List<Order>? orders;
+    private FsUser? user;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var userIdentity = state.User;
+
+        if (userIdentity != null && userIdentity.Identity != null)
+        {
+            user = await UserManager.FindByNameAsync(userIdentity.Identity.Name!);
+            orders = await OrderService.GetOrdersBySellerId(user!.Id);
+        }
+    }
+}

@@ -1,0 +1,113 @@
+﻿@page "/makeorder"
+@using FsElements.Models
+@using System.ComponentModel.DataAnnotations
+@using FsElements.Services
+@rendermode InteractiveServer
+
+@inject OrderBasket OrderBasket
+@inject IOrderService OrderService
+@inject NavigationManager Navigation
+
+<h3>Make Order</h3>
+
+<div class="mx-auto" style="display: table;">
+    @if (orderGroups != null && orderGroups.Any())
+    {
+        @for (var i = 0; i < orderGroups.Count; i++)
+        {
+            <div class="mt-2 ms-3">Seller @(i+1)</div>
+            @foreach (var element in orderGroups[i])
+            {
+                <div class="element-item m-2 p-2">
+                    <div class="d-flex justify-content-between">
+                        <div class="fs-4"><span class="fs-6">(@element.Element!.UniqueCode)</span> @element.Element!.Name</div>
+                        <button class="btn btn-danger" @onclick="() => OnDeleteClick(element)">Delete</button>
+                    </div>
+                    <div class="d-flex align-items-start">
+                        <img class="w-25" src="@(element.Element!.Image != null ? "/Images/Elements/" + @element.Element!.Image : "/Images/Forms/" + element.Element.ElementFormOf!.Image)" />
+                        <div class="ms-2">
+                            <div>Price: @element.Element.PriceRetail/@element.Element.PriceWholesale</div>
+                            <div>Size: @(element.Element.Width)*@(element.Element.Height)</div>
+                            <div>Weight: @element.Element.Weight</div>
+                            <input class="form-control me-2 w-25" type="number" step="1" @bind-value="element.Count" />                            
+                        </div>
+                    </div>
+                </div>
+            }
+            <div class="text-end">
+                Total price: @orderGroups[i].Sum(x => x.Count * x.Element!.PriceRetail)
+            </div>
+        }
+
+        <EditForm OnValidSubmit="OnSubmit" Model="model" style="max-width: 700px;">
+            <DataAnnotationsValidator />
+            <ValidationSummary class="text-danger" role="alert" />
+            <div class="form-floating mb-3">
+                <InputText @bind-Value="model.PhoneNumber" class="form-control" />
+                <label class="form-label">Phone Number*</label>
+                <ValidationMessage For="() => model.PhoneNumber" class="text-danger" />
+            </div>
+            <div class="form-floating mb-3">
+                <InputText @bind-Value="model.Address" class="form-control" />
+                <label class="form-label">Shipping Address*</label>
+                <ValidationMessage For="() => model.Address" class="text-danger" />
+            </div>
+
+            <button class="btn btn-primary mx-auto" type="submit">Make order</button>
+        </EditForm>
+        @if (showSpinner)
+        {
+            <div class="spinner-border text-primary mt-3 mx-auto" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        }
+    }
+</div>
+
+<style>
+    .element-item {
+        border: 1px solid lightgrey;
+        width: 400px;
+    }
+</style>
+
+@code {
+    private List<IGrouping<string?, ElementOrder>>? orderGroups;
+    private InputModel model = new InputModel();
+    private bool showSpinner = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        BuildGroups();
+    }
+
+    private void BuildGroups()
+        => orderGroups = OrderBasket.ElementOrders.GroupBy(x => x.Element!.SellerId).ToList();
+
+    private void OnDeleteClick(ElementOrder element)
+    {
+        OrderBasket.ElementOrders.Remove(element);
+        BuildGroups();
+        OrderBasket.NotifyChanged();
+    }
+
+    public async Task OnSubmit()
+    {
+        showSpinner = true;       
+        foreach (var group in orderGroups!)
+        {
+            await OrderService.MakeOrder(group.ToList(), model.PhoneNumber!, model.Address!);
+        }
+        OrderBasket.ElementOrders.Clear();
+        OrderBasket.NotifyChanged();
+        Navigation.NavigateTo("/");
+    }
+
+    class InputModel
+    {
+        [Required]
+        public string? PhoneNumber { get; set; }
+        [Required]
+        public string? Address { get; set; }
+    }
+}

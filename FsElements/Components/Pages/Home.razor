@@ -1,0 +1,149 @@
+﻿@page "/"
+@using FsElements.Data.Elements
+@using FsElements.Models
+@using FsElements.Services
+@rendermode InteractiveServer
+
+@inject IElementsService ElementsService
+@inject IElementCategoriesService ElementCategoriesService
+@inject OrderBasket OrderBasket
+
+<PageTitle>Elements shop</PageTitle>
+
+<div class="container">
+    <div class="form-floating mx-auto mb-2" style="max-width: 400px;">
+        <select class="form-select" @onchange="OnCategoryChange">
+            <option value="0">All</option>
+            @foreach (var c in categories)
+            {
+                <option value="@c.Id">@c.Name</option>
+            }
+        </select>
+        <label>Select category</label>
+    </div>
+    @if (selectedCategoryId != 0 && forms != null)
+    {
+        <div class="mb-1 mx-auto">Select form</div>
+        <div class="mb-2 mx-auto d-flex w-100 overflow-scroll">
+            <div class="img-form p-4 @(selectedFormId == 0 ? "img-form-selected" : "")"
+                 @onclick="() => OnFormChange(0)">
+                All
+            </div>
+            @foreach (var form in forms)
+            {
+                <img class="img-form @(selectedFormId == form.Id ? "img-form-selected" : "")" 
+                        src="/Images/Forms/@form.Image" @onclick="()=>OnFormChange(form.Id)"/>
+            }
+        </div>
+    }
+
+    @if (elementList != null)
+    {
+        <div class="element-container d-flex flex-row flex-wrap justify-content-center overflow-scroll">
+            @foreach (var element in elementList)
+            {
+                <div class="element-item m-2 p-2">
+                    <div class="fs-4"><span class="fs-6">(@element.Element!.UniqueCode)</span> @element.Element!.Name</div>
+                    <div class="d-flex align-items-start">
+                        <img class="w-25" src="@(element.Element!.Image != null ? "/Images/Elements/" + @element.Element!.Image : "/Images/Forms/" + element.Element.ElementFormOf!.Image)" />
+                        <div class="ms-2">
+                            <div>Price: @element.Element.PriceRetail/@element.Element.PriceWholesale</div>
+                            <div>Size: @(element.Element.Width)*@(element.Element.Height)</div>
+                            <div>Weight: @element.Element.Weight</div>
+                            <div class="d-flex justify-content-end">
+                                <input class="form-control me-2 w-25" type="number" step="1" @bind-value="element.Count"/>
+                                <button class="btn btn-primary" @onclick="() => OnBuyClick(element)">Buy</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<style>
+    .img-form {
+        height: 70px;
+    }
+
+    .img-form-selected {
+        border: 2px solid #198754;
+    }
+
+    .element-item {
+        border: 1px solid lightgrey;
+        width: 400px;
+    }
+
+    .element-container {
+        max-height: calc(100vh - 240px);
+    }
+
+    .count-input {
+    }
+</style>
+
+@code
+{
+    // [CascadingParameter]
+    // public OrderBasket? OrderBasket { get; set; }
+
+    private List<ElementCategory> categories = new();
+    private int selectedCategoryId = 0;
+    private List<ElementForm>? forms;
+    private int selectedFormId = 0;
+    private List<ElementOrder>? elementList;
+
+    protected override async Task OnInitializedAsync()
+    {
+        categories = await ElementCategoriesService.GetAllCategories();
+        await LoadElements();
+    }
+
+    public async Task OnCategoryChange(ChangeEventArgs args)
+    {
+        selectedCategoryId = int.Parse(args.Value.ToString());
+        if (selectedCategoryId != 0)
+        {
+            forms = await ElementCategoriesService.GetFormsByCategoryId(selectedCategoryId);
+        }
+        else
+        {
+            forms = null;
+        }
+        selectedFormId = 0;
+        await LoadElements();
+    }
+
+    public async Task OnFormChange(int formId)
+    {
+        selectedFormId = formId;
+        await LoadElements();
+    }
+
+    private async Task LoadElements()
+    {
+        var list = await ElementsService.GetElementsWithFilter(selectedCategoryId, selectedFormId);
+        elementList = list.Select(e => new ElementOrder { Element = e, Count = 1 }).ToList();
+    }
+
+    private void OnBuyClick(ElementOrder elementOrder)
+    {
+        if (OrderBasket == null)
+            return;
+
+        var el = OrderBasket.ElementOrders.FirstOrDefault(x => x.Element!.Id == elementOrder.Element!.Id);
+        if (el == null)
+        {
+            OrderBasket.ElementOrders.Add(elementOrder);
+        }
+        else
+        {
+            el.Count += elementOrder.Count;
+        }
+        OrderBasket.NotifyChanged();
+    }
+}
+
+

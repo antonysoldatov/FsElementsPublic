@@ -1,0 +1,94 @@
+﻿@page "/seller/elements"
+@using FsElements.Data
+@using FsElements.Data.Elements
+@using FsElements.Services
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Identity
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = Roles.Seller)]
+@rendermode InteractiveServer
+
+@inject IElementsService ElementsService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject UserManager<FsUser> UserManager
+@inject IJSRuntime JsRuntime
+@inject NavigationManager Navigation
+
+<div class="d-flex align-items-end">
+    <h3>MyElements</h3>
+    <a class="btn btn-primary ms-2" href="/seller/element">Add</a>
+</div>
+
+@if (elementList != null)
+{
+    <div class="element-container d-flex flex-row flex-wrap justify-content-center overflow-scroll">
+        @foreach (var element in elementList)
+        {
+            <div class="element-item m-2 p-2">
+                <div class="fs-4"><span class="fs-6">(@element.UniqueCode)</span> @element.Name</div>
+                <div class="d-flex align-items-start">
+                    <img class="w-25" src="@(element.Image != null ? "/Images/Elements/" + @element.Image : "/Images/Forms/" + element.ElementFormOf!.Image)" />
+                    <div class="ms-2">
+                        <div>Price: @element.PriceRetail/@element.PriceWholesale</div>
+                        <div>Size: @(element.Width)*@(element.Height)</div>
+                        <div>Weight: @element.Weight</div>
+                        <div class="d-flex justify-content-end">
+                            <button class="btn btn-secondary m-2" @onclick="() => OnEditClick(element.Id)">Edit</button>
+                            <button class="btn btn-danger m-2" @onclick="() => OnDeleteClick(element.Id)">Delete</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+<style>
+    .element-item {
+        border: 1px solid lightgrey;
+        width: 400px;
+    }
+
+    .element-container {
+        max-height: calc(100vh - 100px);
+    }
+</style>
+
+@code {
+    private List<Element>? elementList;
+    private FsUser? user;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var userIdentity = state.User;
+
+        if (userIdentity != null && userIdentity.Identity != null)
+        {
+            user = await UserManager.FindByNameAsync(userIdentity.Identity.Name!);
+            await LoadData();
+        }
+    }
+
+    private async Task LoadData()
+    {
+        if (user == null)
+            return;
+
+        elementList = await ElementsService.GetElementsBySeller(user.Id);
+    }
+
+    private void OnEditClick(int id)
+    {
+        Navigation.NavigateTo($"/seller/element/{id}");
+    }
+
+    private async Task OnDeleteClick(int id)
+    {
+        bool confirmed = await JsRuntime.InvokeAsync<bool>("confirm", "Do you want to delete?");
+        if (confirmed)
+        {
+            await ElementsService.Delete(id);
+            await LoadData();
+        }
+    }
+}
